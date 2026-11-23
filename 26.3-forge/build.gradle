@@ -1,0 +1,39 @@
+plugins {
+    id 'java'
+    id 'idea'
+    id 'eclipse'
+    id 'net.minecraftforge.gradle' version '[7.0.17,8)'
+}
+version = mod_version
+group = mod_group_id
+java.toolchain.languageVersion = JavaLanguageVersion.of(25)
+base { archivesName = "ToggleItemFrames263-26.3-forge" }
+minecraft {
+    runs {
+        configureEach {
+            workingDir = layout.projectDirectory.dir('run')
+            systemProperty 'eventbus.api.strictRuntimeChecks', 'true'
+            systemProperty 'forge.enabledGameTestNamespaces', mod_id
+        }
+        register('client')
+        register('server') { args '--nogui' }
+        register('gameTestServer')
+    }
+}
+repositories {
+    minecraft.mavenizer(it)
+    maven fg.forgeMaven
+    maven fg.minecraftLibsMaven
+    mavenCentral()
+}
+dependencies {
+    implementation minecraft.dependency('net.minecraftforge:forge:26.3-66.1.5')
+    annotationProcessor 'net.minecraftforge:eventbus-validator:7.0.6'
+    testImplementation "org.junit.jupiter:junit-jupiter:5.10.3"
+    testRuntimeOnly "org.junit.platform:junit-platform-launcher:1.10.3"
+}
+test {
+    useJUnitPlatform()
+    testLogging { events "passed", "failed", "skipped" }
+}
+tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8' }
