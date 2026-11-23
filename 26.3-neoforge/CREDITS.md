@@ -1,0 +1,1 @@
+Inspired by "Toggle Item Frames" on Modrinth (MIT). Independent clean-room implementation.
