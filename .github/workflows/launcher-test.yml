@@ -1,0 +1,123 @@
+name: launcher-test
+
+# GitHub-only launcher smoke test: real headless client for Fabric/NeoForge,
+# headless server for Forge (CI framebuffer cannot render 26.3 Forge client).
+on: [push, pull_request, workflow_dispatch]
+
+jobs:
+  launcher-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: 26.3-fabric
+            loader: fabric
+            java: '25'
+            gradle: '9.8.2'
+            archives: ToggleItemFrames263-26.3-fabric
+            fabric_api: '0.165.0'
+            mc: '26.3'
+            forge_full: ''
+
+          - variant: 26.3-forge
+            loader: forge
+            java: '25'
+            gradle: '9.7.1'
+            archives: ToggleItemFrames263-26.3-forge
+            fabric_api: 'none'
+            mc: '26.3'
+            forge_full: '26.3-66.1.5'
+
+          - variant: 26.3-neoforge
+            loader: neoforge
+            java: '25'
+            gradle: '9.2.1'
+            archives: ToggleItemFrames263-26.3-neoforge
+            fabric_api: 'none'
+            mc: '26.3'
+            forge_full: ''
+
+          - variant: 1.20.1-fabric
+            loader: fabric
+            java: '21'
+            gradle: '9.8.2'
+            archives: ToggleItemFrames263-1.20.1-fabric
+            fabric_api: '0.92.2'
+            mc: '1.20.1'
+            forge_full: ''
+
+          - variant: 1.20.1-forge
+            loader: forge
+            java: '17'
+            gradle: '8.14.5'
+            archives: ToggleItemFrames263-1.20.1-forge
+            fabric_api: 'none'
+            mc: '1.20.1'
+            forge_full: '1.20.1-47.4.20'
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: "${{ matrix.java }}"}
+      - uses: gradle/actions/setup-gradle@v4
+        with: {gradle-version: "${{ matrix.gradle }}"}
+      - name: Build mod (${{ matrix.loader }})
+        working-directory: ${{ matrix.variant }}
+        run: chmod +x gradlew && ./gradlew build --no-daemon --warning-mode all
+      - name: Stage mod for test client
+        run: |
+          mkdir -p run/mods
+          cp "${{ matrix.variant }}/build/libs/"${{ matrix.archives }}-*.jar run/mods/
+          rm -f run/mods/*-sources.jar
+          ls -la run/mods/
+      - name: Launch Minecraft ${{ matrix.mc }} (${{ matrix.loader }}) client with the mod
+        if: matrix.loader != 'forge'
+        uses: headlesshq/mc-runtime-test@5.0.0
+        with:
+          mc: ${{ matrix.mc }}
+          modloader: ${{ matrix.loader }}
+          regex: .*${{ matrix.loader }}.*
+          mc-runtime-test: ${{ matrix.loader }}
+          java: ${{ matrix.java }}
+          xvfb: "true"
+          fabric-api: ${{ matrix.fabric_api }}
+          headlessmc-command: '--jvm "-DMcRuntimeGameTest=false"'
+      - name: Launch Forge ${{ matrix.mc }} server with the mod
+        if: matrix.loader == 'forge'
+        run: |
+          mkdir -p server && cd server
+          curl -fsSLO "https://maven.minecraftforge.net/net/minecraftforge/forge/${{ matrix.forge_full }}/forge-${{ matrix.forge_full }}-installer.jar"
+          java -jar "forge-${{ matrix.forge_full }}-installer.jar" --installServer > install.log 2>&1 || { cat install.log; exit 1; }
+          echo "eula=true" > eula.txt
+          mkdir -p mods
+          cp ../${{ matrix.variant }}/build/libs/${{ matrix.archives }}-*.jar mods/
+          rm -f mods/*-sources.jar
+          if [ -f "forge-${{ matrix.forge_full }}-shim.jar" ]; then
+            echo "Launching modern Forge with shim jar"
+            timeout 600 java @"user_jvm_args.txt" -jar "forge-${{ matrix.forge_full }}-shim.jar" nogui > server.log 2>&1 || STATUS=$?
+          else
+            echo "Launching legacy Forge with unix_args.txt"
+            timeout 600 java @"user_jvm_args.txt" @libraries/net/minecraftforge/forge/${{ matrix.forge_full }}/unix_args.txt nogui > server.log 2>&1 || STATUS=$?
+          fi
+          echo "forge server exit=${STATUS:-0}"
+          echo "=== Forge server log tail ==="
+          tail -30 server.log
+          grep -iE 'initialized on Minecraft .* \(Forge\)' server.log
+          grep -iE 'Done \(|Preparing level' server.log | tail -3
+      - uses: actions/upload-artifact@v4
+        if: matrix.loader == 'forge'
+        with:
+          name: ToggleItemFrames263-jar-forge-${{ matrix.variant }}-server-log
+          path: server/server.log
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ToggleItemFrames263-jar-launcher-logs-${{ matrix.variant }}
+          path: |
+            run/logs/
+            .minecraft/logs/
+            **/latest.log
+          if-no-files-found: warn
