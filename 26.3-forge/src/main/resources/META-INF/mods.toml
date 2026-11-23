@@ -1,0 +1,26 @@
+modLoader = "javafml"
+loaderVersion = "[66,)"
+license = "MIT"
+
+[[mods]]
+modId = "toggleitemframes263"
+version = "1.0.0"
+displayName = "Toggle Item Frames"
+authors = "Itamio"
+description = '''
+Right-click an item frame to toggle its invisibility flag. Scaffold release: rules and metadata only; in-game event wiring is not included.
+'''
+
+[[dependencies.toggleitemframes263]]
+    modId = "forge"
+    mandatory = true
+    versionRange = "[66,)"
+    ordering = "NONE"
+    side = "BOTH"
+
+[[dependencies.toggleitemframes263]]
+    modId = "minecraft"
+    mandatory = true
+    versionRange = "[26.3,26.4)"
+    ordering = "NONE"
+    side = "BOTH"
