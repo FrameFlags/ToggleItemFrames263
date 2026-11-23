@@ -1,0 +1,96 @@
+name: build
+
+# Compiles every loader/version variant and runs pure-Java JUnit tests on GitHub.
+on: [push, pull_request, workflow_dispatch]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: 26.3-fabric
+            loader: fabric
+            java: '25'
+            gradle: '9.8.2'
+            archives: ToggleItemFrames263-26.3-fabric
+            fabric_api: '0.165.0'
+            mc: '26.3'
+            forge_full: ''
+
+          - variant: 26.3-forge
+            loader: forge
+            java: '25'
+            gradle: '9.7.1'
+            archives: ToggleItemFrames263-26.3-forge
+            fabric_api: 'none'
+            mc: '26.3'
+            forge_full: '26.3-66.1.5'
+
+          - variant: 26.3-neoforge
+            loader: neoforge
+            java: '25'
+            gradle: '9.2.1'
+            archives: ToggleItemFrames263-26.3-neoforge
+            fabric_api: 'none'
+            mc: '26.3'
+            forge_full: ''
+
+          - variant: 1.20.1-fabric
+            loader: fabric
+            java: '21'
+            gradle: '9.8.2'
+            archives: ToggleItemFrames263-1.20.1-fabric
+            fabric_api: '0.92.2'
+            mc: '1.20.1'
+            forge_full: ''
+
+          - variant: 1.20.1-forge
+            loader: forge
+            java: '17'
+            gradle: '8.14.5'
+            archives: ToggleItemFrames263-1.20.1-forge
+            fabric_api: 'none'
+            mc: '1.20.1'
+            forge_full: '1.20.1-47.4.20'
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: "${{ matrix.java }}"}
+      - uses: gradle/actions/setup-gradle@v4
+        with: {gradle-version: "${{ matrix.gradle }}"}
+      - name: Validate ${{ matrix.variant }}
+        run: |
+          test -f "${{ matrix.variant }}/build.gradle"
+          test -f "${{ matrix.variant }}/gradle.properties"
+          chmod +x "${{ matrix.variant }}/gradlew"
+      - name: Compile + unit tests + JAR (${{ matrix.loader }})
+        working-directory: ${{ matrix.variant }}
+        run: ./gradlew build --no-daemon --warning-mode all
+      - name: Confirm mod JAR
+        if: always()
+        working-directory: ${{ matrix.variant }}
+        run: |
+          ls -la build/libs/
+          FOUND=0
+          for jar in build/libs/${{ matrix.archives }}-*.jar; do
+            [ -e "$jar" ] || continue
+            case "$jar" in *-sources.jar) ;; *) FOUND=1; test -s "$jar" ;; esac
+          done
+          [ "$FOUND" = "1" ] || (echo "FAIL: mod JAR not found" && exit 1)
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ToggleItemFrames263-jar-${{ matrix.variant }}-jar
+          path: ${{ matrix.variant }}/build/libs/*.jar
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ToggleItemFrames263-jar-${{ matrix.variant }}-test-reports
+          path: |
+            ${{ matrix.variant }}/build/reports/tests/
+            ${{ matrix.variant }}/build/test-results/
